@@ -10,7 +10,17 @@ POWDER_BLUE = "#B0E0E6" # setup navy blue colour theme variables
 POWDER_DARK = "#8CC8D2"
 WHITE_BLUE = "#E8F6F9"
 FONT = "Verdana"
-JOKE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "randomJokes.txt") # define file path to load random jokes from text file
+
+
+def findJokeFile(name="randomJokes.txt"): # search the script's folder and all subfolders for the jokes file
+    base = os.path.dirname(os.path.abspath(__file__))
+    for folder, _, files in os.walk(base):
+        if name in files:
+            return os.path.join(folder, name)
+    return os.path.join(base, name)
+
+
+JOKE_FILE = findJokeFile() # path to the random jokes text file
 
 
 def loadJokes(filename): # function to load and parse jokes line by line
@@ -60,7 +70,7 @@ class CloudButton(tk.Canvas):
                 3 + (px - min(xs)) / (max(xs) - min(xs)) * (width - 6),
                 4 + (py - min(ys)) / (max(ys) - min(ys)) * blobHeight)
         ]
-        self.create_polygon(points, smooth=True, splinesteps=30, outline="", tags=("cloud", "face")) # draw the final polygon shape onto the cnvas
+        self.create_polygon(points, smooth=True, splinesteps=30, outline="", tags=("cloud", "face")) # draw the final polygon shape onto the canvas
         self.create_text(width / 2, 4 + blobHeight / 2, text=text, font=font, tags=("label", "face"))
         self.refresh("normal")
         self.bind("<Enter>", self.onEnter)
@@ -76,7 +86,7 @@ class CloudButton(tk.Canvas):
         fill, textColour, shadow = self.colours["disabled" if self.buttonState == "disabled" else mode]
         self.itemconfigure("cloud", fill=fill)
         self.itemconfigure("label", fill=textColour)
-        for i, ring in enumerate(self.shadowRings): 
+        for i, ring in enumerate(self.shadowRings):
             self.itemconfigure(ring, fill=self.mix(self.base, shadow, 0.9 * (i + 1) / 7))
 
     def shift(self, target): # animate button face moving up or down on click
@@ -119,3 +129,66 @@ class CloudButton(tk.Canvas):
             return super().configure(cnf, **kwargs)
 
     config = configure
+
+
+class JokeAssistant: # main JokeAssistant class to manage the UI layout
+    def __init__(self, root, jokes):
+        self.root, self.jokes, self.currentJoke = root, jokes, None
+        root.title("Alexa Tell Me a Joke")
+        root.geometry("620x690")
+        root.configure(bg=NAVY)
+        root.resizable(False, False)
+        tk.Label(root, text="Alexa, Tell Me a Joke", font=(FONT, 24, "bold"),
+                 bg=NAVY, fg=POWDER_BLUE).pack(pady=(20, 10))
+        card = tk.Frame(root, bg=NAVY_LIGHT, highlightbackground=POWDER_BLUE, highlightthickness=2) # create container card frame for the joke text
+        card.pack(fill="x", padx=30, pady=10)
+        options = dict(bg=NAVY_LIGHT, wraplength=520, justify="center", height=3)
+        self.setupLabel = tk.Label(card, text="Press the button and I'll tell you a joke!",   # label widget to show the joke setup prompt
+                                   font=(FONT, 16), fg=POWDER_BLUE, **options)
+        self.setupLabel.pack(padx=15, pady=(15, 5))
+        self.punchlineLabel = tk.Label(card, text="", font=(FONT, 16, "bold italic"), fg=WHITE_BLUE, **options)  # label widget to show the hidden punchline
+        self.punchlineLabel.pack(padx=15, pady=(5, 15))
+        buttons = tk.Frame(root, bg=NAVY)
+        buttons.pack(pady=15)
+        make = lambda text, command, width, height: CloudButton(
+            buttons, text, command, width, height, POWDER_BLUE, POWDER_DARK, NAVY, "#03060D", (FONT, 12, "bold"))
+        self.tellButton = make("Alexa tell me a Joke", self.tellJoke, 340, 98)
+        self.punchlineButton = make("Show Punchline", self.showPunchline, 235, 88)
+        self.nextButton = make("Next Joke", self.tellJoke, 235, 88)
+        quitButton = make("Quit", root.destroy, 235, 88)
+        self.tellButton.grid(row=0, column=0, columnspan=2, pady=6)
+        self.punchlineButton.grid(row=1, column=0, padx=6, pady=6)
+        self.nextButton.grid(row=1, column=1, padx=6, pady=6)
+        quitButton.grid(row=2, column=0, columnspan=2, pady=6)
+        self.punchlineButton.config(state="disabled")
+        self.nextButton.config(state="disabled")
+        if not jokes:
+            self.tellButton.config(state="disabled")
+            self.setupLabel.config(text="No jokes found in randomJokes.txt")
+
+    def tellJoke(self): # method to randomly pick a new joke without repeating
+        self.currentJoke = random.choice([joke for joke in self.jokes if joke != self.currentJoke] or self.jokes)
+        self.setupLabel.config(text=self.currentJoke[0])
+        self.punchlineLabel.config(text="")
+        self.punchlineButton.config(state="normal")
+        self.nextButton.config(state="normal")
+
+    def showPunchline(self):
+        if self.currentJoke:
+            self.punchlineLabel.config(text=self.currentJoke[1])
+            self.punchlineButton.config(state="disabled")
+
+
+def main():
+    root = tk.Tk()
+    try:
+        jokes = loadJokes(JOKE_FILE)
+    except FileNotFoundError:
+        messagebox.showerror("File not found", f"Could not find randomJokes.txt.\n\nExpected location:\n{JOKE_FILE}")
+        jokes = []
+    JokeAssistant(root, jokes)
+    root.mainloop() # run main application loop to start the program
+
+
+if __name__ == "__main__":
+    main()
